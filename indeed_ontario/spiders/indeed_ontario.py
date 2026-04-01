@@ -70,9 +70,11 @@ class IndeedOntarioSpider(scrapy.Spider):
             - Job item dicts for each listing
             - Follow-up requests for pagination
         """
-        # Select all job cards using data-jk attribute
-        # Indeed uses this attribute to uniquely identify each job
-        job_cards = response.css("div[data-jk], li[data-jk]")
+        # Select all job cards — Indeed wraps each listing in .job_seen_beacon
+        # Fall back to data-jk on div/li for older layouts
+        job_cards = response.css(".job_seen_beacon")
+        if not job_cards:
+            job_cards = response.css("div[data-jk], li[data-jk]")
 
         self.logger.info(f"Found {len(job_cards)} job cards on page")
 
@@ -111,8 +113,8 @@ class IndeedOntarioSpider(scrapy.Spider):
         Returns:
             Dict with job details, or None if job_id is duplicate/missing
         """
-        # Extract job_id from data-jk attribute (primary key for deduplication)
-        job_id = job_card.attrib.get("data-jk")
+        # Extract job_id — may be on the card element itself or on the inner anchor
+        job_id = job_card.attrib.get("data-jk") or job_card.css("[data-jk]::attr(data-jk)").get()
         if not job_id:
             self.logger.warning("Job card missing data-jk attribute, skipping")
             return None
@@ -182,8 +184,8 @@ class IndeedOntarioSpider(scrapy.Spider):
         Returns:
             Absolute URL to the job posting
         """
-        # Try to extract from anchor href first
-        href = job_card.css("a[href*='/viewjob']::attr(href)").get()
+        # Try the anchor that carries data-jk (current Indeed layout), then any viewjob link
+        href = job_card.css("a[data-jk]::attr(href)").get() or job_card.css("a[href*='/viewjob']::attr(href)").get()
         if href:
             return response.urljoin(href)
 
