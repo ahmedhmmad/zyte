@@ -3,6 +3,9 @@
 
 project: 855780
 
+# Use custom Dockerfile for scrapy-zyte-api support
+image: true
+
 # Environment variables for the spider
 # NOTE: ZYTE_API_KEY should be set via Scrapy Cloud UI (Settings > Environment)
 # not hardcoded here for security
