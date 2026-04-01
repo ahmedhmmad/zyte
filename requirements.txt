@@ -1,0 +1,1 @@
+# No additional requirements - using Zyte Cloud built-in features

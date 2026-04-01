@@ -1,0 +1,11 @@
+README.md
+setup.py
+indeed_ontario/__init__.py
+indeed_ontario/settings.py
+indeed_ontario.egg-info/PKG-INFO
+indeed_ontario.egg-info/SOURCES.txt
+indeed_ontario.egg-info/dependency_links.txt
+indeed_ontario.egg-info/entry_points.txt
+indeed_ontario.egg-info/top_level.txt
+indeed_ontario/spiders/__init__.py
+indeed_ontario/spiders/indeed_ontario.py

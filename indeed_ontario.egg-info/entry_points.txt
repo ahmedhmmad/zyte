@@ -1,0 +1,2 @@
+[scrapy]
+settings = indeed_ontario.settings

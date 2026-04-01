@@ -1,0 +1,23 @@
+# Zyte Scrapy Cloud Project Configuration
+# Reference: https://docs.zyte.com/scrapy-cloud/config.html
+
+project: 855780
+
+# Environment variables for the spider
+# NOTE: ZYTE_API_KEY should be set via Scrapy Cloud UI (Settings > Environment)
+# not hardcoded here for security
+env:
+  # Example: Set custom user agent if needed
+  # USER_AGENT: "Mozilla/5.0 (compatible; IndeedBot/1.0)"
+  # ZYTE_API_KEY is set in Scrapy Cloud UI, not here
+
+# Job scheduling defaults (optional)
+# These can be overridden when scheduling via API or UI
+jobs:
+  # Default timeout in seconds (1 hour)
+  timeout: 3600
+  # Units: number of parallel workers (for distributed crawling)
+  units: 1
+
+# Portia visual scraping tool (disabled — using code-based spider)
+# portia: false
