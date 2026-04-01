@@ -6,13 +6,9 @@ project: 855780
 # Use custom Dockerfile for scrapy-zyte-api support
 image: true
 
-# Environment variables for the spider
-# NOTE: ZYTE_API_KEY should be set via Scrapy Cloud UI (Settings > Environment)
-# not hardcoded here for security
+# Environment variables - ZYTE_API_KEY should be set via GitHub Secrets
 env:
-  # Example: Set custom user agent if needed
-  # USER_AGENT: "Mozilla/5.0 (compatible; IndeedBot/1.0)"
-  # ZYTE_API_KEY is set in Scrapy Cloud UI, not here
+  ZYTE_API_KEY: ${{ secrets.ZYTE_API_KEY }}
 
 # Job scheduling defaults (optional)
 # These can be overridden when scheduling via API or UI
