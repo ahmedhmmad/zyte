@@ -46,7 +46,7 @@ DOWNLOADER_MIDDLEWARES = {
 }
 
 # Zyte API Configuration
-# API key is automatically provided by Scrapy Cloud environment
+# API key is provided via GitHub Secrets during deployment
 ZYTE_API_KEY = os.environ.get("ZYTE_API_KEY")
 
 # Enable browser HTML rendering for JavaScript-heavy pages
