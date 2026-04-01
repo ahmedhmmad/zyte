@@ -21,6 +21,15 @@ jobs:
       - name: Deploy to Zyte Cloud
         env:
           SHUB_APIKEY: ${{ secrets.SHUB_API_KEY }}
-          ZYTE_API_KEY: ${{ secrets.ZYTE_API_KEY }}
         run: |
           shub deploy
+
+      - name: Set ZYTE_API_KEY via Zyte API
+        env:
+          ZYTE_API_KEY: ${{ secrets.ZYTE_API_KEY }}
+          PROJECT_ID: 855780
+        run: |
+          curl -X POST "https://dash.zyte.com/api/projects/${PROJECT_ID}/envvar/" \
+            -u "${SHUB_APIKEY}:" \
+            -H "Content-Type: application/json" \
+            -d '{"name": "ZYTE_API_KEY", "value": "'"${ZYTE_API_KEY}"'"}'
