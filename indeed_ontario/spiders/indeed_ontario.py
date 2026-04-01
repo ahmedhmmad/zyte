@@ -21,6 +21,7 @@ from typing import Any, Dict, Iterator, Optional, Set, Union
 
 import scrapy
 from scrapy.http import Response
+from scrapy.spidermiddlewares.httperror import HttpError
 
 
 class IndeedOntarioSpider(scrapy.Spider):
@@ -94,9 +95,16 @@ class IndeedOntarioSpider(scrapy.Spider):
         """
         partial: Dict[str, Any] = response.meta["partial"]
 
-        description_text = self._extract_description_text(response)
-        duties = self._extract_section(description_text, r"job\s+duties|responsibilities|what\s+you['']ll\s+do")
-        requirements = self._extract_section(description_text, r"job\s+requirements?|qualifications?|what\s+you\s+(need|bring)|requirements?")
+        container = self._get_description_container(response)
+        description_text = self._container_to_text(container) if container else ""
+        duties = self._extract_section_html(
+            container,
+            r"job\s+duties|responsibilities|what\s+you[''\u2019]ll\s+do|your\s+role",
+        )
+        requirements = self._extract_section_html(
+            container,
+            r"job\s+requirements?|qualifications?|what\s+you\s+(need|bring)|requirements?|must\s+have",
+        )
 
         yield {
             **partial,
@@ -194,51 +202,101 @@ class IndeedOntarioSpider(scrapy.Spider):
     # Detail-page helpers
     # ------------------------------------------------------------------ #
 
-    def _extract_description_text(self, response: Response) -> str:
-        """Return the full job description as plain text."""
-        container = response.css("#jobDescriptionText, .jobsearch-jobDescriptionText")
-        if not container:
-            return ""
-        # Join all text nodes; collapse whitespace
+    # Selectors tried in order to locate the job description container.
+    # Indeed has used several different IDs/classes over time.
+    _DESCRIPTION_SELECTORS = (
+        "#jobDescriptionText",
+        ".jobsearch-jobDescriptionText",
+        ".jobDescriptionText",
+        '[data-testid="jobDescriptionText"]',
+        "#job-description-container",
+        ".jobsearch-JobComponent-description",
+        # Broad fallback: any div whose id contains "description"
+        'div[id*="description"]',
+    )
+
+    def _get_description_container(self, response: Response):
+        """Return the first matching description container, or None."""
+        for sel in self._DESCRIPTION_SELECTORS:
+            container = response.css(sel)
+            if container:
+                # Verify it actually has text before accepting
+                if any(t.strip() for t in container.css("::text").getall()):
+                    self.logger.debug(f"Description container matched by: {sel}")
+                    return container
+        self.logger.warning(f"No description container found on: {response.url}")
+        return None
+
+    def _container_to_text(self, container) -> str:
+        """Flatten all text nodes in a container into a single string."""
         parts = container.css("*::text").getall()
-        text = " ".join(p.strip() for p in parts if p.strip())
-        return text
+        return " ".join(p.strip() for p in parts if p.strip())
 
-    def _extract_section(self, text: str, heading_pattern: str) -> str:
+    def _extract_section_html(self, container, heading_pattern: str) -> str:
         """
-        Extract the content that follows a section heading matching heading_pattern.
+        Extract a named section from the description container by scanning
+        the HTML structure.
 
-        Looks for a heading line, then collects text until the next heading-like
-        line or end of text. Returns an empty string if the section is not found.
+        Strategy:
+        - Walk every block-level and inline-heading element in document order.
+        - When an element whose text matches heading_pattern is found, switch
+          into collection mode.
+        - Collect text from <p> and <li> elements that follow.
+        - Stop when the next heading-like element is encountered.
+
+        This works on the rendered HTML tree and is far more reliable than
+        trying to split a flat text string.
         """
-        if not text:
+        if container is None:
             return ""
 
-        # Split on sentence-ending punctuation or newline-like boundaries
-        # (the plain text has no real newlines after joining; we use capital
-        #  letter sequences as heuristic section boundaries)
-        lines = re.split(r'(?<=[.!?])\s+(?=[A-Z])', text)
-
-        result_parts = []
         in_section = False
+        result_parts = []
 
-        for line in lines:
-            if re.search(heading_pattern, line, re.IGNORECASE):
+        # Walk headings, bold/strong (used as pseudo-headings), paragraphs, list items
+        for element in container.css("h1, h2, h3, h4, h5, h6, strong, b, p, li, div"):
+            raw_texts = element.css("::text").getall()
+            text = " ".join(t.strip() for t in raw_texts if t.strip())
+            if not text:
+                continue
+
+            tag = element.root.tag
+
+            # Decide whether this element is a heading / section boundary
+            is_heading = (
+                tag in ("h1", "h2", "h3", "h4", "h5", "h6")
+                or (tag in ("strong", "b") and len(text) < 120)
+                or (tag == "div" and len(text) < 120 and re.search(r":\s*$", text))
+            )
+
+            if is_heading and re.search(heading_pattern, text, re.IGNORECASE):
                 in_section = True
-                # Include text after the colon on the same line, if any
-                after_colon = re.split(r'[:]\s*', line, maxsplit=1)
-                if len(after_colon) > 1 and after_colon[1].strip():
-                    result_parts.append(after_colon[1].strip())
+                # Capture anything after a colon on the same heading line
+                after = re.split(r":\s*", text, maxsplit=1)
+                if len(after) > 1 and after[1].strip():
+                    result_parts.append(after[1].strip())
                 continue
 
             if in_section:
-                # Stop at the next section heading (a short line ending with ":")
-                if re.search(r'\w{4,}.*:\s*$', line):
+                if is_heading:
+                    # Reached the next section — stop
                     break
-                result_parts.append(line.strip())
+                if tag in ("p", "li"):
+                    result_parts.append(text)
 
         return " ".join(result_parts).strip()
 
-    def handle_error(self, failure) -> None:
-        self.logger.error(f"Request failed: {failure.value}")
-        self.logger.error(f"Failed URL: {failure.request.url}")
+    def handle_error(self, failure) -> Iterator[Dict[str, Any]]:
+        if failure.check(HttpError):
+            response = failure.value.response
+            if response.status == 404:
+                # Likely a fake/ad placeholder job ID — yield partial item with empty detail fields
+                partial = failure.request.meta.get("partial")
+                if partial:
+                    self.logger.warning(f"Job not found (404), keeping listing data: {failure.request.url}")
+                    yield {**partial, "full_description": "", "job_duties": "", "job_requirements": ""}
+                return
+            self.logger.error(f"HTTP {response.status} for: {failure.request.url}")
+        else:
+            self.logger.error(f"Request failed: {failure.value}")
+            self.logger.error(f"Failed URL: {failure.request.url}")
