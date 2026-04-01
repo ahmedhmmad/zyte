@@ -34,6 +34,12 @@ DEFAULT_REQUEST_HEADERS = {
     "Accept-Language": "en-CA,en-US;q=0.7,en;q=0.3",
 }
 
+# Enable scrapy-zyte-api addon — this activates the downloader/spider middlewares
+# required for zyte_api meta to be honored and requests to be routed through Zyte API
+ADDONS = {
+    "scrapy_zyte_api.Addon": 500,
+}
+
 # Enable or disable spider middlewares
 SPIDER_MIDDLEWARES = {
     "scrapy.spidermiddlewares.offsite.OffsiteMiddleware": 500,
@@ -42,7 +48,6 @@ SPIDER_MIDDLEWARES = {
 # Enable or disable downloader middlewares
 DOWNLOADER_MIDDLEWARES = {
     "scrapy.downloadermiddlewares.useragent.UserAgentMiddleware": None,
-    "scrapy.downloadermiddlewares.retry.RetryMiddleware": None,
 }
 
 # Zyte API Configuration
@@ -58,9 +63,7 @@ EXTENSIONS = {
 }
 
 # Configure item pipelines
-ITEM_PIPELINES = {
-    "scrapy.pipelines.files.FilesPipeline": 1,
-}
+ITEM_PIPELINES = {}
 
 # Enable and configure the AutoThrottle extension (disabled by default)
 AUTOTHROTTLE_ENABLED = False  # Zyte API handles throttling
